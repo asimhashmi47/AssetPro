@@ -1,0 +1,208 @@
+<div class="dt card">
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="input-icon search">
+      <app-icon name="search" />
+      <input class="input" type="search" [value]="search()" (input)="onSearch($any($event.target).value)"
+        [placeholder]="searchPlaceholder()" aria-label="Search table" maxlength="100" />
+    </div>
+    <ng-content select="[table-toolbar]" />
+    <div class="spacer"></div>
+    <div class="tools">
+      <button type="button" class="btn btn-sm" [class.btn-soft]="showFilters() || activeFilterCount() > 0" (click)="showFilters.set(!showFilters())"
+        [attr.aria-expanded]="showFilters()">
+        <app-icon name="filter" [size]="15" /> Filters
+        @if (activeFilterCount() > 0) { <span class="count">{{ activeFilterCount() }}</span> }
+      </button>
+      @if (hasCriteria()) {
+        <button type="button" class="btn btn-sm btn-ghost" (click)="clearFilters()"><app-icon name="x" [size]="15" /> Clear</button>
+      }
+      <div class="menu-anchor">
+        <button type="button" class="btn btn-sm" (click)="toggleMenu($event, 'columns')" [attr.aria-expanded]="columnsMenu()">
+          <app-icon name="columns" [size]="15" /> Columns
+        </button>
+        @if (columnsMenu()) {
+          <div class="menu right" role="menu">
+            <div class="menu-title">Show columns</div>
+            @for (col of columns(); track col.key) {
+              <label class="col-option" [class.locked]="col.locked">
+                <input type="checkbox" [checked]="!hiddenKeys().has(col.key)" [disabled]="col.locked" (change)="toggleColumn(col)" />
+                {{ col.label }}
+              </label>
+            }
+            <hr />
+            <button type="button" (click)="resetColumns()"><app-icon name="refresh" /> Reset to default</button>
+          </div>
+        }
+      </div>
+      <button type="button" class="btn btn-sm" (click)="exportCsv()" [disabled]="exporting() || total() === 0" title="Export the filtered rows as CSV (opens in Excel)">
+        @if (exporting()) { <span class="spinner"></span> } @else { <app-icon name="download" [size]="15" /> }
+        Export
+      </button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="scroller" [class.busy]="loading() && loadedOnce()" (scroll)="openEnumFilter.set(null)">
+    <table>
+      <thead>
+        <tr>
+          @for (col of visibleColumns(); track col.key) {
+            <th [style.width]="col.width" [class]="'al-' + (col.align ?? 'start')" [attr.aria-sort]="ariaSort(col)" scope="col">
+              @if (col.sortable !== false) {
+                <button type="button" class="sort" (click)="toggleSort(col)" [class.active]="sort() === col.key">
+                  {{ col.label }}
+                  <span class="sort-icon">
+                    @if (sort() === col.key) {
+                      <app-icon [name]="dir() === 'asc' ? 'arrow-up' : 'arrow-down'" [size]="13" [stroke]="2.2" />
+                    } @else {
+                      <app-icon name="sort" [size]="13" />
+                    }
+                  </span>
+                </button>
+              } @else {
+                <span class="th-label">{{ col.label }}</span>
+              }
+            </th>
+          }
+          @if (actionsTemplate()) { <th class="al-end actions-col"><span class="sr-only">Actions</span></th> }
+        </tr>
+        @if (showFilters()) {
+          <tr class="filter-row">
+            @for (col of visibleColumns(); track col.key) {
+              <th>
+                @switch (filterKind(col)) {
+                  @case ('text') {
+                    <input class="input input-sm" [value]="filterValue(col.key)" (input)="onTextFilter(col.key, $any($event.target).value)"
+                      [attr.aria-label]="'Filter ' + col.label" placeholder="Filter…" maxlength="100" />
+                  }
+                  @case ('enum') {
+                    <div class="menu-anchor">
+                      <button type="button" class="input input-sm enum-btn" (click)="toggleMenu($event, col.key)"
+                        [class.has-value]="selectedOptions(col.key).size > 0" [attr.aria-label]="'Filter ' + col.label">
+                        <span class="truncate">{{ enumSummary(col) }}</span><app-icon name="chevron-down" [size]="14" />
+                      </button>
+                      @if (openEnumFilter() === col.key) {
+                        <div class="menu fixed" role="menu" [style.top.px]="enumMenuPos().top" [style.left.px]="enumMenuPos().left">
+                          @for (opt of col.options; track opt.value) {
+                            <label class="col-option">
+                              <input type="checkbox" [checked]="selectedOptions(col.key).has(opt.value)" (change)="toggleOption(col.key, opt.value)" />
+                              {{ opt.label }}
+                            </label>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                  @case ('date') {
+                    <div class="range">
+                      <input class="input input-sm" type="date" [value]="rangePart(col.key, 'from')" (change)="onRangeFilter(col.key, 'from', $any($event.target).value)" aria-label="From date" />
+                      <input class="input input-sm" type="date" [value]="rangePart(col.key, 'to')" (change)="onRangeFilter(col.key, 'to', $any($event.target).value)" aria-label="To date" />
+                    </div>
+                  }
+                  @case ('number') {
+                    <div class="range">
+                      <input class="input input-sm" type="number" inputmode="decimal" placeholder="Min" [value]="rangePart(col.key, 'from')" (input)="onRangeFilter(col.key, 'from', $any($event.target).value)" aria-label="Minimum" />
+                      <input class="input input-sm" type="number" inputmode="decimal" placeholder="Max" [value]="rangePart(col.key, 'to')" (input)="onRangeFilter(col.key, 'to', $any($event.target).value)" aria-label="Maximum" />
+                    </div>
+                  }
+                  @case ('bool') {
+                    <select class="select input-sm" [value]="filterValue(col.key)" (change)="onBoolFilter(col.key, $any($event.target).value)" [attr.aria-label]="'Filter ' + col.label">
+                      <option value="">All</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  }
+                }
+              </th>
+            }
+            @if (actionsTemplate()) { <th></th> }
+          </tr>
+        }
+      </thead>
+
+      <tbody>
+        @if (loading() && !loadedOnce()) {
+          @for (i of skeletonRows; track i) {
+            <tr class="skel-row">
+              @for (col of visibleColumns(); track col.key) {
+                <td><span class="skeleton" [style.width.%]="45 + ((i * 17 + $index * 23) % 45)"></span></td>
+              }
+              @if (actionsTemplate()) { <td></td> }
+            </tr>
+          }
+        } @else if (!error()) {
+          @for (row of rows(); track trackRow($index, row)) {
+            <tr [class.clickable]="rowClickable()">
+              @for (col of visibleColumns(); track col.key) {
+                <td [class]="'al-' + (col.align ?? 'start')" [attr.data-label]="col.label">
+                  @if (templateFor().get(col.key); as tpl) {
+                    <ng-container *ngTemplateOutlet="tpl; context: { $implicit: row }" />
+                  } @else {
+                    @let v = value(row, col.key);
+                    @switch (col.format) {
+                      @case ('badge') { <app-badge [value]="v" /> }
+                      @case ('mono') { <span class="tag">{{ v ?? '—' }}</span> }
+                      @case ('date') { <span class="nowrap">{{ v | localDate }}</span> }
+                      @case ('datetime') { <span class="nowrap">{{ v | localDate: 'datetime' }}</span> }
+                      @case ('money') { <span class="num">{{ v | money }}</span> }
+                      @case ('number') { <span class="num">{{ v ?? '—' }}</span> }
+                      @case ('bool') { {{ v ? 'Yes' : 'No' }} }
+                      @default { <span class="cell-text">{{ v ?? '—' }}</span> }
+                    }
+                  }
+                </td>
+              }
+              @if (actionsTemplate(); as actions) {
+                <td class="al-end actions-col">
+                  <div class="row-actions"><ng-container *ngTemplateOutlet="actions.template; context: { $implicit: row }" /></div>
+                </td>
+              }
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+
+    @if (error()) {
+      <app-error-state (retry)="reload()" />
+    } @else if (loadedOnce() && !loading() && rows().length === 0) {
+      @if (hasCriteria()) {
+        <app-empty-state title="No matching records" message="Try a different search or clear the filters." icon="search">
+          <button type="button" class="btn btn-sm" (click)="clearFilters()">Clear filters</button>
+        </app-empty-state>
+      } @else {
+        <app-empty-state [title]="emptyTitle()" [message]="emptyMessage()" [icon]="emptyIcon()">
+          <ng-content select="[table-empty-action]" />
+        </app-empty-state>
+      }
+    }
+  </div>
+
+  <!-- Footer / pagination -->
+  @if (total() > 0) {
+    <div class="pager">
+      <span class="muted small">Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ total() }}</strong></span>
+      <label class="size small muted">
+        Rows
+        <select class="select input-sm" [value]="pageSize()" (change)="changePageSize($any($event.target).value)" aria-label="Rows per page">
+          @for (size of pageSizes; track size) { <option [value]="size" [selected]="size === pageSize()">{{ size }}</option> }
+        </select>
+      </label>
+      <div class="spacer"></div>
+      <nav class="pages" aria-label="Pagination">
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="goTo(1)" [disabled]="page() === 1" aria-label="First page"><app-icon name="chevrons-left" [size]="16" /></button>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="goTo(page() - 1)" [disabled]="page() === 1" aria-label="Previous page"><app-icon name="chevron-left" [size]="16" /></button>
+        @for (p of pages(); track $index) {
+          @if (p === '…') {
+            <span class="gap">…</span>
+          } @else {
+            <button type="button" class="btn btn-sm page-btn" [class.current]="p === page()" (click)="goTo(p)" [attr.aria-current]="p === page() ? 'page' : null">{{ p }}</button>
+          }
+        }
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="goTo(page() + 1)" [disabled]="page() === pageCount()" aria-label="Next page"><app-icon name="chevron-right" [size]="16" /></button>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="goTo(pageCount())" [disabled]="page() === pageCount()" aria-label="Last page"><app-icon name="chevrons-right" [size]="16" /></button>
+      </nav>
+    </div>
+  }
+</div>

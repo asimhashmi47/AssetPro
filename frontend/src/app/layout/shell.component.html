@@ -1,0 +1,89 @@
+<div class="layout" [class.nav-open]="sidebarOpen()">
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" routerLink="/">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="34" height="34"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M9 21.5 15.2 9h1.6L23 21.5h-3l-1.2-2.6h-5.6L12 21.5H9Zm5.2-5h3.6L16 12.6l-1.8 3.9Z" fill="#fff"/></svg>
+      </span>
+      <span class="brand-text">
+        <strong>AssetPro</strong>
+        <small>{{ ref.settings().companyName }}</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      @for (group of nav(); track group.title) {
+        <div class="group">
+          <span class="group-title">{{ group.title }}</span>
+          @for (item of group.items; track item.link) {
+            <a class="nav-link" [routerLink]="item.link" routerLinkActive="active" #rla="routerLinkActive" [attr.aria-current]="rla.isActive ? 'page' : null">
+              <app-icon [name]="item.icon" [size]="18" />
+              <span>{{ item.label }}</span>
+            </a>
+          }
+        </div>
+      }
+    </nav>
+
+    <div class="sidebar-card">
+      <span class="sc-icon"><app-icon name="sparkles" [size]="16" /></span>
+      <strong>Track every asset.</strong>
+      <span>Simplify every handover.</span>
+    </div>
+  </aside>
+  <button type="button" class="scrim" aria-label="Close menu" (click)="sidebarOpen.set(false)"></button>
+
+  <div class="main">
+    <header class="topbar">
+      <button type="button" class="btn btn-ghost btn-icon menu-btn" (click)="sidebarOpen.set(true)" aria-label="Open menu">
+        <app-icon name="menu" [size]="20" />
+      </button>
+      <div class="greeting">
+        <span class="hello">Welcome back, {{ auth.user()?.fullName?.split(' ')?.[0] }}</span>
+        <span class="sub">{{ ref.settings().companyName }}</span>
+      </div>
+      <div class="spacer"></div>
+      @if (auth.can('Requests.Create') && auth.user()?.employeeId) {
+        <a class="btn btn-soft btn-sm new-req" routerLink="/requests" [queryParams]="{ new: 1 }">
+          <app-icon name="plus" [size]="15" /> <span>New request</span>
+        </a>
+      }
+      <div class="user-anchor">
+        <button type="button" class="user-btn" (click)="toggleUserMenu($event)" [attr.aria-expanded]="userMenu()" aria-haspopup="menu">
+          <span class="avatar" [class]="'avatar ' + avatarClass()">{{ initials() }}</span>
+          <span class="who">
+            <strong>{{ auth.user()?.fullName }}</strong>
+            <small>{{ auth.isAdmin() ? 'Administrator' : 'Standard user' }}</small>
+          </span>
+          <app-icon name="chevron-down" [size]="15" />
+        </button>
+        @if (userMenu()) {
+          <div class="menu user-menu" role="menu" (click)="$event.stopPropagation()">
+            <div class="menu-head">
+              <strong>{{ auth.user()?.fullName }}</strong>
+              <span>{{ auth.user()?.email }}</span>
+            </div>
+            <hr />
+            @if (auth.user()?.employeeId) {
+              <a routerLink="/my-workspace" (click)="userMenu.set(false)"><app-icon name="user" /> My profile & assets</a>
+            }
+            <a routerLink="/account" (click)="userMenu.set(false)"><app-icon name="key" /> Change password</a>
+            <hr />
+            <button type="button" class="danger" (click)="logout()"><app-icon name="logout" /> Sign out</button>
+          </div>
+        }
+      </div>
+    </header>
+
+    <main class="content" id="main">
+      <router-outlet />
+    </main>
+
+    <footer class="footer">
+      <span>© {{ year }} {{ ref.settings().companyName }}</span>
+      <span class="dot">•</span>
+      <span>AssetPro v1.0 — Track Every Asset. Simplify Every Handover.</span>
+      <span class="dot">•</span>
+      <app-credit />
+    </footer>
+  </div>
+</div>

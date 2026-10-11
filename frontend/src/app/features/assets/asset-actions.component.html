@@ -1,0 +1,190 @@
+@let m = meta();
+@let a = asset();
+<app-modal [open]="!!m" [title]="m?.title ?? ''" [icon]="m?.icon" [tone]="m?.tone ?? 'primary'" [busy]="saving()" (closed)="close()"
+  [size]="mode() === 'return' || mode() === 'replace' ? 'lg' : 'md'">
+  @if (a) {
+    <div class="asset-chip">
+      <span class="tag">{{ a.assetTag }}</span>
+      <div class="stack" style="gap: 0">
+        <strong>{{ a.name }}</strong>
+        <span>{{ a.assetType }}@if (a.assignedTo) { · held by {{ a.assignedTo }} }</span>
+      </div>
+    </div>
+  }
+
+  @switch (mode()) {
+    @case ('assign') {
+      <form id="action-form" class="stack" [formGroup]="assignForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="emp-pick">Employee<span class="req">*</span></label>
+          <app-employee-picker inputId="emp-pick" formControlName="employeeId" (picked)="selectedEmployee.set($event)" />
+          <app-field-error [control]="assignForm.controls.employeeId" name="Employee" [server]="errors()['employeeId']" />
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="as-date">Assignment date</label>
+            <input id="as-date" class="input" type="datetime-local" formControlName="assignedAt" [max]="nowLocal" />
+            <app-field-error [server]="errors()['assignedAt']" />
+          </div>
+          <div class="field">
+            <label for="as-cond">Condition at assignment</label>
+            <select id="as-cond" class="select" formControlName="condition">
+              <option value="">Keep current ({{ a?.condition }})</option>
+              @for (c of conditions; track c.value) { <option [value]="c.value">{{ c.label }}</option> }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="as-notes">Notes</label>
+          <textarea id="as-notes" class="textarea" formControlName="notes" maxlength="2000" rows="2" placeholder="e.g. Issued with charger and sleeve"></textarea>
+        </div>
+      </form>
+    }
+
+    @case ('return') {
+      <form id="action-form" class="form-grid" [formGroup]="returnForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="rt-date">Return date</label>
+          <input id="rt-date" class="input" type="datetime-local" formControlName="returnedAt" [max]="nowLocal" />
+          <app-field-error [server]="errors()['returnedAt']" />
+        </div>
+        <div class="field">
+          <label for="rt-by">Returned by</label>
+          <input id="rt-by" class="input" formControlName="returnedBy" maxlength="150" [placeholder]="a?.assignedTo ?? 'Name'" />
+        </div>
+        <div class="field">
+          <label for="rt-cond">Condition on return</label>
+          <select id="rt-cond" class="select" formControlName="condition">
+            @for (c of conditions; track c.value) { <option [value]="c.value">{{ c.label }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label for="rt-status">Move asset to</label>
+          <select id="rt-status" class="select" formControlName="resultingStatus">
+            <option value="InStock">In Stock (available)</option>
+            <option value="UnderRepair">Under Repair</option>
+            <option value="Damaged">Damaged</option>
+            <option value="Scrapped">Scrap</option>
+          </select>
+          <app-field-error [server]="errors()['resultingStatus']" />
+        </div>
+        @if (returnForm.controls.condition.value === 'Damaged' || returnForm.controls.condition.value === 'Critical' || returnForm.controls.resultingStatus.value !== 'InStock') {
+          <div class="field full">
+            <label for="rt-damage">Damage details</label>
+            <textarea id="rt-damage" class="textarea" formControlName="damageDetails" maxlength="2000" rows="2" placeholder="What is wrong with it?"></textarea>
+          </div>
+        }
+        @if (returnForm.controls.resultingStatus.value === 'Scrapped') {
+          <div class="field full">
+            <label for="rt-scrap">Scrap reason<span class="req">*</span></label>
+            <input id="rt-scrap" class="input" formControlName="scrapReason" maxlength="500" placeholder="e.g. Liquid damage, not economical to repair" />
+            <app-field-error [server]="errors()['scrapReason']" />
+          </div>
+        }
+        <div class="field full">
+          <label for="rt-notes">Notes</label>
+          <textarea id="rt-notes" class="textarea" formControlName="notes" maxlength="2000" rows="2"></textarea>
+        </div>
+      </form>
+    }
+
+    @case ('replace') {
+      <form id="action-form" class="form-grid" [formGroup]="replaceForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="rc-comp">Component<span class="req">*</span></label>
+          <input id="rc-comp" class="input" formControlName="component" maxlength="100" list="components" placeholder="e.g. RAM" />
+          <datalist id="components">@for (c of commonComponents; track c) { <option [value]="c"></option> }</datalist>
+          <app-field-error [control]="replaceForm.controls.component" name="Component" [server]="errors()['component']" />
+        </div>
+        <div class="field">
+          <label for="rc-date">Replacement date</label>
+          <input id="rc-date" class="input" type="date" formControlName="replacedOn" [max]="today" />
+          <app-field-error [server]="errors()['replacedOn']" />
+        </div>
+        <div class="field">
+          <label for="rc-old">Old component</label>
+          <input id="rc-old" class="input" formControlName="oldComponent" maxlength="150" placeholder="e.g. 8GB RAM" />
+        </div>
+        <div class="field">
+          <label for="rc-new">New component<span class="req">*</span></label>
+          <input id="rc-new" class="input" formControlName="newComponent" maxlength="150" placeholder="e.g. 16GB RAM" />
+          <app-field-error [control]="replaceForm.controls.newComponent" name="New component" />
+        </div>
+        <div class="field full">
+          <label for="rc-reason">Reason<span class="req">*</span></label>
+          <input id="rc-reason" class="input" formControlName="reason" maxlength="500" placeholder="e.g. RAM failure" />
+          <app-field-error [control]="replaceForm.controls.reason" name="Reason" />
+        </div>
+        <div class="field full">
+          <label for="rc-notes">Notes</label>
+          <textarea id="rc-notes" class="textarea" formControlName="notes" maxlength="2000" rows="2" placeholder="RAM replaced due to hardware failure."></textarea>
+          <span class="hint">The current assignment is not changed. This entry is added to the asset’s history.</span>
+        </div>
+      </form>
+    }
+
+    @case ('scrap') {
+      <form id="action-form" class="stack" [formGroup]="scrapForm" (ngSubmit)="submit()" novalidate>
+        <div class="warn"><span>Scrapping is permanent: the asset stays in reports and history but can never be assigned again.</span></div>
+        <div class="field">
+          <label for="sc-reason">Reason<span class="req">*</span></label>
+          <input id="sc-reason" class="input" formControlName="reason" maxlength="500" placeholder="e.g. Motherboard failure, beyond repair" />
+          <app-field-error [control]="scrapForm.controls.reason" name="Reason" [server]="errors()['reason']" />
+        </div>
+        <div class="field">
+          <label for="sc-date">Scrap date</label>
+          <input id="sc-date" class="input" type="date" formControlName="scrapDate" [max]="today" />
+          <app-field-error [server]="errors()['scrapDate']" />
+        </div>
+        <div class="field">
+          <label for="sc-notes">Notes</label>
+          <textarea id="sc-notes" class="textarea" formControlName="notes" maxlength="2000" rows="2"></textarea>
+        </div>
+      </form>
+    }
+
+    @case ('repair-complete') {
+      <form id="action-form" class="stack" [formGroup]="repairForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="rp-cond">Condition after repair</label>
+          <select id="rp-cond" class="select" formControlName="resultingCondition">
+            @for (c of conditions; track c.value) { <option [value]="c.value">{{ c.label }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label for="rp-notes">Repair notes</label>
+          <textarea id="rp-notes" class="textarea" formControlName="notes" maxlength="2000" rows="3" placeholder="What was fixed?"></textarea>
+          <span class="hint">{{ a?.assignedTo ? 'The asset goes back to ' + a?.assignedTo + '.' : 'The asset is released back to stock.' }}</span>
+        </div>
+      </form>
+    }
+
+    @case ('repair-start') {
+      <form id="action-form" class="stack" [formGroup]="repairForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="rs-notes">Problem / repair notes</label>
+          <textarea id="rs-notes" class="textarea" formControlName="notes" maxlength="2000" rows="3" placeholder="e.g. Battery swelling - sent to service centre"></textarea>
+          <span class="hint">While under repair the asset cannot be assigned. An existing assignment stays in place.</span>
+        </div>
+      </form>
+    }
+
+    @default {
+      <form id="action-form" class="stack" [formGroup]="statusForm" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="st-notes">Notes</label>
+          <textarea id="st-notes" class="textarea" formControlName="notes" maxlength="2000" rows="3"></textarea>
+        </div>
+      </form>
+    }
+  }
+
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="close()" [disabled]="saving()">Cancel</button>
+    <button type="submit" form="action-form" class="btn"
+      [class.btn-primary]="m?.tone !== 'danger' && m?.tone !== 'success'" [class.btn-danger]="m?.tone === 'danger'" [class.btn-success]="m?.tone === 'success'"
+      [disabled]="saving()">
+      @if (saving()) { <span class="spinner"></span> } {{ m?.submit }}
+    </button>
+  </ng-container>
+</app-modal>

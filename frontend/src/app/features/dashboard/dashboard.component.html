@@ -1,0 +1,143 @@
+<div class="page">
+  <app-page-header title="Dashboard" [subtitle]="today + ' · live overview of your assets, stock and requests'" icon="dashboard">
+    <button type="button" class="btn" (click)="load()" [disabled]="loading()">
+      <app-icon name="refresh" [size]="16" /> Refresh
+    </button>
+    @if (auth.can('Assets.Create')) {
+      <a class="btn btn-primary" routerLink="/assets" [queryParams]="{ new: 1 }"><app-icon name="plus" [size]="16" /> Add asset</a>
+    }
+  </app-page-header>
+
+  @if (error()) {
+    <div class="card"><app-error-state (retry)="load()" /></div>
+  } @else {
+    @let d = data();
+    <section class="grid grid-4 stats" aria-label="Key metrics">
+      <app-stat-card label="Total assets" [value]="d?.totalAssets ?? null" [hint]="d ? (d.portfolioValue | money: true) + ' active portfolio' : ''" icon="box" [hero]="true" [loading]="loading()" />
+      <app-stat-card label="Assigned" [value]="d?.assignedAssets ?? null" [hint]="utilisation() + '% utilisation'" icon="user-check" accent="indigo" [loading]="loading()" />
+      <app-stat-card label="Available in stock" [value]="d?.availableAssets ?? null" hint="Ready to hand out" icon="package-plus" accent="emerald" [loading]="loading()" />
+      <app-stat-card label="Under repair" [value]="d?.underRepair ?? null" [hint]="(d?.damaged ?? 0) + ' damaged awaiting action'" icon="wrench" accent="amber" [loading]="loading()" />
+      <app-stat-card label="Scrapped" [value]="d?.scrapped ?? null" hint="Kept for audit history" icon="trash" accent="rose" [loading]="loading()" />
+      <app-stat-card label="Employees" [value]="d?.totalEmployees ?? null" hint="Active staff" icon="users" accent="cyan" [loading]="loading()" />
+      <app-stat-card label="Pending approval" [value]="d?.pendingRequests ?? null" hint="Submitted, awaiting review" icon="inbox" accent="violet" [loading]="loading()" />
+      <app-stat-card label="Open requests" [value]="d?.openRequests ?? null" [hint]="(d?.warrantyExpiringSoon ?? 0) + ' warranties expiring in 30 days'" icon="clipboard-check" accent="slate" [loading]="loading()" />
+    </section>
+
+    <section class="charts">
+      <article class="card chart-card status">
+        <div class="card-head">
+          <div><h2>Asset status</h2><span class="sub">Where everything is right now</span></div>
+        </div>
+        <div class="card-body">
+          @if (statusChart(); as cfg) {
+            <div class="donut-wrap">
+              <app-chart [config]="cfg" [height]="270" label="Asset status breakdown" />
+              <div class="donut-center"><strong>{{ utilisation() }}%</strong><span>in use</span></div>
+            </div>
+          } @else { <div class="skeleton chart-skel"></div> }
+        </div>
+      </article>
+
+      <article class="card chart-card">
+        <div class="card-head">
+          <div><h2>Assets by type</h2><span class="sub">Active inventory, excluding scrapped and retired</span></div>
+        </div>
+        <div class="card-body">
+          @if (typeChart(); as cfg) {
+            @if (d!.typeBreakdown.length) {
+              <app-chart [config]="cfg" [height]="270" label="Assets by type" />
+            } @else {
+              <app-empty-state title="No assets yet" icon="box" [compact]="true" />
+            }
+          } @else { <div class="skeleton chart-skel"></div> }
+        </div>
+      </article>
+
+      <article class="card chart-card">
+        <div class="card-head">
+          <div><h2>Request trend</h2><span class="sub">Submitted vs completed, last 6 months</span></div>
+        </div>
+        <div class="card-body">
+          @if (requestChart(); as cfg) { <app-chart [config]="cfg" [height]="250" label="Monthly request trend" /> }
+          @else { <div class="skeleton chart-skel"></div> }
+        </div>
+      </article>
+
+      <article class="card chart-card">
+        <div class="card-head">
+          <div><h2>Assignment trend</h2><span class="sub">Handovers and returns, last 6 months</span></div>
+        </div>
+        <div class="card-body">
+          @if (assignmentChart(); as cfg) { <app-chart [config]="cfg" [height]="250" label="Monthly assignment trend" /> }
+          @else { <div class="skeleton chart-skel"></div> }
+        </div>
+      </article>
+    </section>
+
+    <section class="lower">
+      <article class="card">
+        <div class="card-head">
+          <div><h2>Recent activity</h2><span class="sub">Latest asset events</span></div>
+          <span class="spacer"></span>
+          @if (auth.can('Assets.View')) { <a class="btn btn-ghost btn-sm" routerLink="/history">View all <app-icon name="arrow-right" [size]="14" /></a> }
+        </div>
+        <div class="card-body">
+          @if (d) { <app-history-timeline [items]="d.recentActivity" /> }
+          @else { @for (i of [1, 2, 3, 4]; track i) { <div class="skeleton line-skel"></div> } }
+        </div>
+      </article>
+
+      <div class="side">
+        <article class="card">
+          <div class="card-head">
+            <div><h2>Request summary</h2><span class="sub">Most recently updated</span></div>
+            <span class="spacer"></span>
+            <a class="btn btn-ghost btn-sm" routerLink="/requests">All <app-icon name="arrow-right" [size]="14" /></a>
+          </div>
+          <div class="card-body">
+            @if (d) {
+              <div class="req-pills">
+                @for (s of d.requestStatusBreakdown; track s.name) {
+                  @if (s.count > 0) { <span class="req-pill"><app-badge [value]="s.name" /> <strong>{{ s.count }}</strong></span> }
+                }
+              </div>
+              <ul class="req-list">
+                @for (r of d.recentRequests; track r.id) {
+                  <li>
+                    <a [routerLink]="['/requests', r.id]">
+                      <span class="req-main">
+                        <span class="req-no mono">{{ r.requestNumber }}</span>
+                        <span class="req-who truncate">{{ r.requesterName }} · {{ r.type === 'NewAsset' ? 'New Asset' : r.type }}</span>
+                      </span>
+                      <app-badge [value]="r.status" />
+                    </a>
+                  </li>
+                } @empty {
+                  <app-empty-state title="No requests found" icon="inbox" [compact]="true" />
+                }
+              </ul>
+            } @else { @for (i of [1, 2, 3]; track i) { <div class="skeleton line-skel"></div> } }
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div><h2>Low stock</h2><span class="sub">At or below reorder level</span></div>
+          </div>
+          <div class="card-body">
+            @if (d) {
+              @for (item of d.lowStock; track item.id) {
+                <div class="stock-row">
+                  <div class="stock-text"><strong class="truncate">{{ item.name }}</strong><span>{{ item.assetType }}</span></div>
+                  <span class="stock-num" [class.zero]="item.inStock === 0">{{ item.inStock }} <small>/ {{ item.reorderLevel }}</small></span>
+                </div>
+              } @empty {
+                <div class="all-good"><app-icon name="check-circle" [size]="18" /> Stock levels look healthy.</div>
+              }
+            } @else { <div class="skeleton line-skel"></div> }
+          </div>
+        </article>
+      </div>
+    </section>
+  }
+</div>

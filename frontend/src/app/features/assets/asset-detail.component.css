@@ -1,0 +1,37 @@
+.back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-weight: 600; font-size: 13px; width: fit-content; }
+.back:hover { color: var(--ink); text-decoration: none; }
+
+.hero { display: flex; align-items: center; gap: 20px; padding: 22px 24px; flex-wrap: wrap;
+  background: radial-gradient(90% 140% at 100% 0%, #f1edff 0%, transparent 55%), var(--surface); }
+.hero-main { display: flex; gap: 18px; align-items: center; flex: 1; min-width: 280px; }
+.type-icon { width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; color: #fff; background: var(--grad-indigo);
+  box-shadow: 0 12px 24px -12px rgba(79, 70, 229, .7); flex-shrink: 0; }
+.hero-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hero-text h1 { font-size: 24px; overflow-wrap: anywhere; }
+.tag.big { font-size: 13px; padding: 4px 9px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: var(--s-5); align-items: start; }
+.col { display: flex; flex-direction: column; gap: var(--s-5); }
+.notes { margin-top: 16px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; font-size: 13.5px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.holder { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.holder-text { display: flex; flex-direction: column; gap: 2px; }
+.holder-text strong { font-size: 16px; color: var(--ink); }
+.kv.compact { font-size: 13px; }
+.scrapped { display: flex; gap: 12px; padding: 14px; border-radius: 12px; background: var(--danger-soft); color: var(--danger-ink); }
+.scrapped div { display: flex; flex-direction: column; gap: 2px; }
+.scrapped span { font-size: 13px; color: var(--ink-2); }
+
+.timeline-card .card-head { padding-bottom: 4px; }
+.assign-row, .comp-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; }
+.assign-row + .assign-row, .comp-row + .comp-row { border-top: 1px solid var(--line); }
+.assign-text, .comp-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; font-size: 13px; color: var(--ink-3); }
+.assign-text strong, .comp-text strong { color: var(--ink); font-size: 14px; }
+.dmg { color: var(--danger-ink); }
+.comp-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: var(--violet-soft); color: var(--violet-ink); flex-shrink: 0; }
+.swap { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); flex-wrap: wrap; }
+.swap s { color: var(--ink-4); }
+.swap b { color: var(--success-ink); }
+
+@media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }

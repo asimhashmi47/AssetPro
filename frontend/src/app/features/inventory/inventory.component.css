@@ -1,0 +1,9 @@
+.item-name { color: var(--ink); display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { display: block; font-size: 12px; color: var(--ink-3); max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qty { display: inline-block; min-width: 34px; text-align: center; font-weight: 700; padding: 3px 8px; border-radius: 8px;
+  background: var(--success-soft); color: var(--success-ink); font-variant-numeric: tabular-nums; }
+.qty.low { background: var(--warning-soft); color: var(--warning-ink); }
+.qty.zero { background: var(--danger-soft); color: var(--danger-ink); }
+.num { font-weight: 700; color: var(--success-ink); font-variant-numeric: tabular-nums; }
+.num.neg { color: var(--danger-ink); }
+.mono-text { font-family: var(--font-mono); font-size: 12.5px; }

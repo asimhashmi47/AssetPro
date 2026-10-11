@@ -1,0 +1,90 @@
+@let p = profile();
+@let emp = e();
+<section class="hero card">
+  <div class="cover"></div>
+  <div class="hero-body">
+    <span class="avatar xl" [class]="'avatar xl ' + avatar()">{{ initials() }}</span>
+    <div class="hero-text">
+      <div class="row wrap">
+        <h1>{{ emp.fullName }}</h1>
+        <app-badge [value]="emp.status" />
+        @if (emp.role) { <span class="badge plain" [class]="emp.role === 'Admin' ? 'badge plain violet' : 'badge plain'">{{ emp.role === 'Admin' ? 'Administrator' : 'Standard user' }}</span> }
+      </div>
+      <p class="muted">{{ emp.designation ?? 'No designation' }}@if (emp.department) { · {{ emp.department }} }</p>
+    </div>
+    <div class="hero-actions">
+      @if (self() && auth.can('Requests.Create')) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="newRequest.emit(null)"><app-icon name="plus" [size]="15" /> New request</button>
+      }
+      @if (!self() && auth.can('Employees.Edit')) {
+        <button type="button" class="btn btn-sm" (click)="edit.emit()"><app-icon name="edit" [size]="15" /> Edit profile</button>
+      }
+      @if (!self() && auth.isAdmin()) {
+        <button type="button" class="btn btn-sm btn-ghost danger" (click)="remove.emit()"><app-icon name="trash" [size]="15" /> Delete</button>
+      }
+    </div>
+  </div>
+  <dl class="facts">
+    <div><dt><app-icon name="tag" [size]="14" /> Employee code</dt><dd class="mono">{{ emp.employeeCode }}</dd></div>
+    <div><dt><app-icon name="mail" [size]="14" /> Email</dt><dd>{{ emp.email }}</dd></div>
+    <div><dt><app-icon name="message" [size]="14" /> Contact</dt><dd>{{ emp.contactNumber ?? '—' }}</dd></div>
+    <div><dt><app-icon name="building" [size]="14" /> Company</dt><dd>{{ emp.companyName ?? '—' }}</dd></div>
+    <div><dt><app-icon name="calendar" [size]="14" /> Joined AssetPro</dt><dd>{{ emp.createdAt | localDate }}</dd></div>
+  </dl>
+</section>
+
+<section class="grid grid-3 mini-stats">
+  <div class="mini indigo"><span class="mi"><app-icon name="box" [size]="18" /></span><div><strong>{{ p.assets.length }}</strong><span>Assets held</span></div></div>
+  <div class="mini violet"><span class="mi"><app-icon name="inbox" [size]="18" /></span><div><strong>{{ openRequests() }}</strong><span>Open requests</span></div></div>
+  <div class="mini emerald"><span class="mi"><app-icon name="history" [size]="18" /></span><div><strong>{{ p.history.length }}</strong><span>History events</span></div></div>
+</section>
+
+<div class="layout">
+  <article class="card">
+    <div class="card-head"><div><h2>Assigned assets</h2><span class="sub">Currently in {{ self() ? 'your' : 'their' }} possession</span></div></div>
+    <div class="card-body">
+      @for (a of p.assets; track a.id) {
+        <a class="asset-row" [routerLink]="['/assets', a.id]">
+          <span class="a-icon"><app-icon [name]="typeIcon(a.assetType)" [size]="18" /></span>
+          <span class="a-text">
+            <strong class="truncate">{{ a.name }}</strong>
+            <span><span class="tag">{{ a.assetTag }}</span> {{ a.assetType }} · since {{ a.assignedAt | localDate }}</span>
+          </span>
+          <app-badge [value]="a.status" />
+          @if (self() && auth.can('Requests.Create') && a.status === 'Assigned') {
+            <button type="button" class="btn btn-sm btn-ghost req-btn" (click)="$event.preventDefault(); $event.stopPropagation(); newRequest.emit(a.id)" title="Raise a request for this asset">
+              <app-icon name="message" [size]="15" />
+            </button>
+          }
+        </a>
+      } @empty {
+        <app-empty-state title="No assets assigned" [message]="self() ? 'When IT hands you equipment it will show up here.' : 'Nothing is currently assigned to this employee.'" icon="box" [compact]="true" />
+      }
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" [class.active]="tab() === 'timeline'" (click)="tab.set('timeline')">Asset timeline <span class="count">{{ p.history.length }}</span></button>
+        <button type="button" role="tab" [class.active]="tab() === 'requests'" (click)="tab.set('requests')">Requests <span class="count">{{ p.requests.length }}</span></button>
+      </div>
+    </div>
+    <div class="card-body">
+      @if (tab() === 'timeline') {
+        <app-history-timeline [items]="p.history" />
+      } @else {
+        @for (r of p.requests; track r.id) {
+          <a class="req-row" [routerLink]="['/requests', r.id]">
+            <span class="mono">{{ r.requestNumber }}</span>
+            <span class="req-text"><strong>{{ r.type === 'NewAsset' ? 'New Asset' : r.type }}@if (r.assetTag) { · {{ r.assetTag }} }</strong><span class="truncate">{{ r.comments }}</span></span>
+            <span class="muted small nowrap">{{ r.createdAt | localDate }}</span>
+            <app-badge [value]="r.status" />
+          </a>
+        } @empty {
+          <app-empty-state title="No requests found" message="Repair, replacement and new-asset requests appear here." icon="inbox" [compact]="true" />
+        }
+      }
+    </div>
+  </article>
+</div>

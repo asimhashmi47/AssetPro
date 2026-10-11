@@ -1,0 +1,223 @@
+<div class="page">
+  <app-page-header title="Settings" subtitle="Company preferences, master data, users and permissions." icon="settings" />
+
+  <div class="tabs" role="tablist">
+    @if (canSettings()) {
+      <button type="button" role="tab" [class.active]="tab() === 'general'" (click)="tab.set('general')"><app-icon name="building" [size]="15" /> General</button>
+      <button type="button" role="tab" [class.active]="tab() === 'master'" (click)="tab.set('master')"><app-icon name="layers" [size]="15" /> Master data</button>
+    }
+    @if (canUsers()) {
+      <button type="button" role="tab" [class.active]="tab() === 'users'" (click)="tab.set('users')"><app-icon name="shield" [size]="15" /> Users & permissions</button>
+    }
+    <button type="button" role="tab" [class.active]="tab() === 'about'" (click)="tab.set('about')"><app-icon name="info" [size]="15" /> About</button>
+  </div>
+
+  @switch (tab()) {
+    @case ('general') {
+      <form class="card card-pad narrow stack" [formGroup]="settingsForm" (ngSubmit)="saveSettings()" novalidate>
+        <div class="field">
+          <label for="s-company">Company name<span class="req">*</span></label>
+          <input id="s-company" class="input" formControlName="companyName" maxlength="120" />
+          <app-field-error [control]="settingsForm.controls.companyName" name="Company name" />
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="s-currency">Currency code<span class="req">*</span></label>
+            <input id="s-currency" class="input" formControlName="currency" maxlength="3" placeholder="USD" style="text-transform: uppercase" />
+            <app-field-error [control]="settingsForm.controls.currency" name="Currency" />
+          </div>
+          <div class="field">
+            <label for="s-size">Default rows per page</label>
+            <select id="s-size" class="select" formControlName="defaultPageSize">
+              @for (n of [10, 25, 50, 100]; track n) { <option [ngValue]="n">{{ n }}</option> }
+            </select>
+          </div>
+          <div class="field">
+            <label for="s-warranty">Warranty alert window (days)</label>
+            <input id="s-warranty" class="input" type="number" min="1" max="365" formControlName="warrantyAlertDays" />
+            <app-field-error [control]="settingsForm.controls.warrantyAlertDays" name="Alert window" />
+          </div>
+        </div>
+        <div class="row">
+          <span class="spacer"></span>
+          <button type="submit" class="btn btn-primary" [disabled]="savingSettings()">@if (savingSettings()) { <span class="spinner"></span> } Save settings</button>
+        </div>
+      </form>
+    }
+
+    @case ('master') {
+      <div class="master">
+        <nav class="kinds card">
+          @for (k of kinds; track k[0]) {
+            <button type="button" [class.active]="kind() === k[0]" (click)="selectKind(k[0])">{{ k[1] }}s</button>
+          }
+        </nav>
+        <article class="card">
+          <div class="card-head">
+            <div><h2>{{ kindLabel(kind()) }}s</h2>
+              <span class="sub">Values in use can be deactivated but not deleted, so history stays intact.</span></div>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-sm btn-primary" (click)="openLookup(null)"><app-icon name="plus" [size]="15" /> Add</button>
+          </div>
+          <div class="card-body">
+            @if (lookupError()) {
+              <app-error-state (retry)="loadLookups()" />
+            } @else if (lookups(); as items) {
+              @for (item of items; track item.id) {
+                <div class="lookup-row" [class.inactive]="!item.isActive">
+                  <span class="l-name">{{ item.name }}</span>
+                  @if (item.tagPrefix) { <span class="tag">{{ item.tagPrefix }}</span> }
+                  @if (!item.isActive) { <span class="badge plain">Inactive</span> }
+                  <span class="spacer"></span>
+                  <span class="muted small">{{ item.usageCount }} in use</span>
+                  <button type="button" class="btn btn-sm btn-ghost btn-icon" (click)="openLookup(item)" aria-label="Edit"><app-icon name="edit" [size]="15" /></button>
+                  <button type="button" class="btn btn-sm btn-ghost btn-icon" (click)="deleteLookup(item)" [disabled]="item.usageCount > 0"
+                    [title]="item.usageCount > 0 ? 'In use - deactivate instead' : 'Delete'" aria-label="Delete"><app-icon name="trash" [size]="15" /></button>
+                </div>
+              } @empty {
+                <app-empty-state title="Nothing here yet" message="Add the first value to use it in forms." icon="layers" [compact]="true" />
+              }
+            } @else {
+              @for (i of [1, 2, 3, 4]; track i) { <div class="skeleton" style="height: 40px; margin-bottom: 8px"></div> }
+            }
+          </div>
+        </article>
+      </div>
+    }
+
+    @case ('users') {
+      <app-data-table #usersTable [columns]="userColumns" [fetch]="fetchUsers" storageKey="users" exportName="users" defaultSort="email"
+        searchPlaceholder="Search users…" emptyTitle="No users" emptyIcon="shield">
+        <div table-toolbar><button type="button" class="btn btn-sm btn-primary" (click)="openNewUser()"><app-icon name="user-plus" [size]="15" /> New sign-in</button></div>
+        <ng-template appCell="fullName" let-row>
+          <span class="u-cell"><strong>{{ row.fullName ?? row.email }}</strong><span>{{ row.email }}</span></span>
+        </ng-template>
+        <ng-template appCell="role" let-row>
+          <span class="badge plain" [class]="row.role === 'Admin' ? 'badge plain violet' : 'badge plain'">{{ row.role === 'Admin' ? 'Administrator' : 'User' }}</span>
+          @if (row.role !== 'Admin' && row.grantedPermissions.length) { <span class="muted small"> +{{ row.grantedPermissions.length }} permission(s)</span> }
+        </ng-template>
+        <ng-template appRowActions let-row>
+          <button type="button" class="btn btn-sm" (click)="openUser(row)"><app-icon name="shield" [size]="15" /> Access</button>
+          <button type="button" class="btn btn-sm btn-ghost btn-icon" (click)="resetPassword(row)" title="Reset password" aria-label="Reset password"><app-icon name="key" [size]="15" /></button>
+          @if (auth.isAdmin()) {
+            <button type="button" class="btn btn-sm btn-ghost btn-icon danger" (click)="deleteUser(row)" title="Delete sign-in" aria-label="Delete sign-in"><app-icon name="trash" [size]="15" /></button>
+          }
+        </ng-template>
+      </app-data-table>
+    }
+
+    @case ('about') {
+      <article class="card card-pad narrow about">
+        <div class="about-head">
+          <svg viewBox="0 0 32 32" width="52" height="52"><defs><linearGradient id="ab" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#ab)"/><path d="M9 21.5 15.2 9h1.6L23 21.5h-3l-1.2-2.6h-5.6L12 21.5H9Zm5.2-5h3.6L16 12.6l-1.8 3.9Z" fill="#fff"/></svg>
+          <div><h2>AssetPro</h2><p class="muted">Track Every Asset. Simplify Every Handover.</p></div>
+        </div>
+        @if (about(); as a) {
+          <dl class="kv">
+            <dt>Version</dt><dd>{{ a.version }}</dd>
+            <dt>Environment</dt><dd>{{ a.environment }}</dd>
+            <dt>Database</dt><dd>{{ a.database }}</dd>
+            <dt>Assets / employees / users</dt><dd>{{ a.assets }} / {{ a.employees }} / {{ a.users }}</dd>
+            <dt>Server time</dt><dd>{{ a.serverTimeUtc | localDate: 'datetime' }}</dd>
+          </dl>
+        }
+      </article>
+    }
+  }
+</div>
+
+<!-- Lookup editor -->
+<app-modal [open]="lookupOpen()" [title]="(lookupEdit() ? 'Edit ' : 'Add ') + kindLabel(kind())" icon="layers" size="sm" [busy]="lookupSaving()" (closed)="lookupOpen.set(false)">
+  <form id="lookup-form" class="stack" (ngSubmit)="saveLookup()">
+    <div class="field">
+      <label for="lk-name">Name<span class="req">*</span></label>
+      <input id="lk-name" class="input" name="name" [(ngModel)]="lookupName" maxlength="100" required />
+      @if (lookupError2()) { <span class="error">{{ lookupError2() }}</span> }
+    </div>
+    @if (kind() === 'asset-types') {
+      <div class="field">
+        <label for="lk-prefix">Tag prefix</label>
+        <input id="lk-prefix" class="input" name="prefix" [(ngModel)]="lookupPrefix" maxlength="6" placeholder="e.g. LAP" />
+      </div>
+    }
+    @if (lookupEdit()) {
+      <label class="check"><input type="checkbox" name="active" [(ngModel)]="lookupActive" /> Active (shown in dropdowns)</label>
+    }
+  </form>
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="lookupOpen.set(false)" [disabled]="lookupSaving()">Cancel</button>
+    <button type="submit" form="lookup-form" class="btn btn-primary" [disabled]="lookupSaving() || !lookupName.trim()">@if (lookupSaving()) { <span class="spinner"></span> } Save</button>
+  </ng-container>
+</app-modal>
+
+<!-- User access editor -->
+<app-modal [open]="userOpen()" title="Access & permissions" [subtitle]="userEdit()?.fullName ?? userEdit()?.email" icon="shield" size="lg" [busy]="userSaving()" (closed)="userOpen.set(false)">
+  @if (userEdit(); as u) {
+    <div class="stack">
+      <div class="form-grid">
+        <div class="field">
+          <label for="u-role">Role</label>
+          <select id="u-role" class="select" [ngModel]="userRole()" (ngModelChange)="userRole.set($event)" [disabled]="u.id === auth.user()?.id">
+            <option value="User">Standard user</option>
+            <option value="Admin">Administrator</option>
+          </select>
+          @if (u.id === auth.user()?.id) { <span class="hint">You can’t change your own role.</span> }
+        </div>
+        <div class="field">
+          <span class="label">Account</span>
+          <label class="check" style="height: 40px"><input type="checkbox" [ngModel]="userActive()" (ngModelChange)="userActive.set($event)" [disabled]="u.id === auth.user()?.id" /> Active — can sign in</label>
+        </div>
+      </div>
+      @if (userRole() === 'Admin') {
+        <div class="info-box"><app-icon name="info" [size]="16" /> Administrators have every permission.</div>
+      } @else {
+        <div class="perm-grid">
+          @for (g of permissionGroups; track g.title) {
+            <fieldset class="perm-group">
+              <legend>{{ g.title }}</legend>
+              @for (p of g.items; track p) {
+                <label class="check">
+                  <input type="checkbox" [checked]="isDefault(p) || userPerms().has(p)" [disabled]="isDefault(p)" (change)="togglePerm(p)" />
+                  {{ p.split('.')[1] }} <span class="muted small">{{ isDefault(p) ? '(always)' : '' }}</span>
+                </label>
+              }
+            </fieldset>
+          }
+        </div>
+        <span class="hint">Standard users always see their own profile, assets and requests. Changes take effect at their next sign-in.</span>
+      }
+    </div>
+  }
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="userOpen.set(false)" [disabled]="userSaving()">Cancel</button>
+    <button type="button" class="btn btn-primary" (click)="saveUser()" [disabled]="userSaving()">@if (userSaving()) { <span class="spinner"></span> } Save access</button>
+  </ng-container>
+</app-modal>
+
+<!-- New sign-in -->
+<app-modal [open]="newUserOpen()" title="New sign-in account" subtitle="Give an existing employee access to AssetPro." icon="user-plus" [busy]="userSaving()" (closed)="newUserOpen.set(false)">
+  <form id="new-user" class="stack" [formGroup]="newUserForm" (ngSubmit)="createUser()" novalidate>
+    <div class="field">
+      <label>Employee<span class="req">*</span></label>
+      <app-employee-picker formControlName="employeeId" />
+      <app-field-error [control]="newUserForm.controls.employeeId" name="Employee" [server]="newUserErrors()['employeeId']" />
+    </div>
+    <div class="field">
+      <label for="nu-role">Role</label>
+      <select id="nu-role" class="select" formControlName="role">
+        <option value="User">Standard user</option>
+        <option value="Admin">Administrator</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="nu-pass">Temporary password<span class="req">*</span></label>
+      <input id="nu-pass" class="input" type="password" formControlName="password" autocomplete="new-password" />
+      <span class="hint">8+ characters with a letter and a number. Ask the user to change it after signing in.</span>
+      <app-field-error [control]="newUserForm.controls.password" name="Password" [server]="newUserErrors()['password']" />
+    </div>
+  </form>
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="newUserOpen.set(false)" [disabled]="userSaving()">Cancel</button>
+    <button type="submit" form="new-user" class="btn btn-primary" [disabled]="userSaving()">@if (userSaving()) { <span class="spinner"></span> } Create sign-in</button>
+  </ng-container>
+</app-modal>

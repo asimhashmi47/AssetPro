@@ -1,0 +1,153 @@
+<div class="page">
+  <a class="back" [routerLink]="canManage() ? '/assets' : '/my-workspace'"><app-icon name="arrow-left" [size]="15" /> {{ canManage() ? 'All assets' : 'My workspace' }}</a>
+
+  @if (error() === 'missing') {
+    <div class="card"><app-empty-state title="Asset not found" message="It may not exist, or you don’t have access to it." icon="search" /></div>
+  } @else if (error() === 'failed') {
+    <div class="card"><app-error-state (retry)="load()" /></div>
+  } @else if (loading() && !detail()) {
+    <div class="card card-pad"><div class="skeleton" style="height: 120px"></div></div>
+    <div class="grid grid-2"><div class="skeleton" style="height: 320px"></div><div class="skeleton" style="height: 320px"></div></div>
+  } @else if (detail(); as d) {
+    @let a = d.asset;
+    <section class="hero card">
+      <div class="hero-main">
+        <span class="type-icon"><app-icon [name]="a.assetType === 'Laptop' || a.assetType === 'Desktop Computer' ? 'laptop' : a.assetType.startsWith('Monitor') ? 'monitor' : 'box'" [size]="26" /></span>
+        <div class="hero-text">
+          <div class="row wrap">
+            <span class="tag big">{{ a.assetTag }}</span>
+            <app-badge [value]="a.status" />
+            <app-badge [value]="a.condition" [plain]="true" />
+          </div>
+          <h1>{{ a.name }}</h1>
+          <p class="muted">{{ a.assetType }}@if (a.brand) { · {{ a.brand }} }@if (a.model) { {{ a.model }} }</p>
+        </div>
+      </div>
+      <div class="hero-actions">
+        @for (action of available(); track action.mode) {
+          <button type="button" class="btn btn-sm" [class.btn-primary]="action.primary" [class.btn-danger]="action.danger" (click)="run(action.mode)">
+            <app-icon [name]="action.icon" [size]="15" /> {{ action.label }}
+          </button>
+        }
+        @if (auth.can('Assets.Edit') && a.status !== 'Scrapped') {
+          <button type="button" class="btn btn-sm btn-ghost" (click)="editOpen.set(true)"><app-icon name="edit" [size]="15" /> Edit</button>
+        }
+        @if (auth.isAdmin()) {
+          <button type="button" class="btn btn-sm btn-ghost danger" (click)="remove()" [disabled]="deleting()">
+            <app-icon name="trash" [size]="15" /> Delete
+          </button>
+        }
+      </div>
+    </section>
+
+    <div class="layout">
+      <div class="col">
+        <article class="card">
+          <div class="card-head"><h2>Details</h2></div>
+          <div class="card-body">
+            <dl class="kv">
+              <dt>Serial number</dt><dd>@if (a.serialNumber) { <span class="mono">{{ a.serialNumber }}</span> } @else { — }</dd>
+              <dt>Location</dt><dd>{{ a.location ?? '—' }}</dd>
+              <dt>Purchase date</dt><dd>{{ a.purchaseDate | localDate }}</dd>
+              <dt>Purchase cost</dt><dd>{{ a.purchaseCost | money }}</dd>
+              <dt>Warranty</dt>
+              <dd>
+                {{ a.warrantyExpiry | localDate }}
+                @if (warrantyState(); as w) { <span class="badge plain" [class]="'badge plain ' + w.tone" style="margin-left: 6px">{{ w.text }}</span> }
+              </dd>
+              <dt>Registered</dt><dd>{{ a.createdAt | localDate: 'datetime' }}</dd>
+            </dl>
+            @if (d.notes) { <p class="notes">{{ d.notes }}</p> }
+          </div>
+        </article>
+
+        <article class="card holder-card">
+          <div class="card-head"><h2>Current holder</h2></div>
+          <div class="card-body">
+            @if (d.currentAssignment; as c) {
+              <div class="holder">
+                <span class="avatar lg" [class]="'avatar lg ' + avatarClass(c.employeeName)">{{ initials(c.employeeName) }}</span>
+                <div class="holder-text">
+                  @if (auth.can('Employees.View')) { <a [routerLink]="['/employees', c.employeeId]"><strong>{{ c.employeeName }}</strong></a> }
+                  @else { <strong>{{ c.employeeName }}</strong> }
+                  <span class="mono muted">{{ c.employeeCode }}</span>
+                </div>
+              </div>
+              <dl class="kv compact">
+                <dt>Assigned on</dt><dd>{{ c.assignedAt | localDate: 'datetime' }}</dd>
+                <dt>Assigned by</dt><dd>{{ c.assignedBy }}</dd>
+                <dt>Condition then</dt><dd><app-badge [value]="c.conditionAtAssignment" /></dd>
+                @if (c.notes) { <dt>Notes</dt><dd>{{ c.notes }}</dd> }
+              </dl>
+            } @else if (d.scrap; as s) {
+              <div class="scrapped">
+                <app-icon name="trash" [size]="20" />
+                <div><strong>Scrapped on {{ s.scrapDate | localDate }}</strong><span>{{ s.reason }} · by {{ s.performedBy }}</span></div>
+              </div>
+            } @else {
+              <app-empty-state title="Not assigned" [message]="a.status === 'InStock' ? 'This asset is available in stock.' : 'This asset is ' + a.status.toLowerCase() + '.'" icon="user" [compact]="true">
+                @if (a.status === 'InStock' && auth.can('Assets.Assign')) {
+                  <button type="button" class="btn btn-sm btn-primary" (click)="run('assign')"><app-icon name="user-check" [size]="15" /> Assign now</button>
+                }
+              </app-empty-state>
+            }
+          </div>
+        </article>
+      </div>
+
+      <article class="card timeline-card">
+        <div class="card-head">
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" [class.active]="tab() === 'history'" (click)="tab.set('history')">History <span class="count">{{ history().length }}</span></button>
+            @if (canManage()) {
+              <button type="button" role="tab" [class.active]="tab() === 'assignments'" (click)="tab.set('assignments')">Assignments <span class="count">{{ d.assignments.length }}</span></button>
+            }
+            <button type="button" role="tab" [class.active]="tab() === 'components'" (click)="tab.set('components')">Components <span class="count">{{ d.replacements.length }}</span></button>
+          </div>
+        </div>
+        <div class="card-body">
+          @switch (tab()) {
+            @case ('history') { <app-history-timeline [items]="history()" [showAsset]="false" /> }
+            @case ('assignments') {
+              @for (x of d.assignments; track x.id) {
+                <div class="assign-row">
+                  <span class="avatar" [class]="'avatar ' + avatarClass(x.employeeName)">{{ initials(x.employeeName) }}</span>
+                  <div class="assign-text">
+                    <strong>{{ x.employeeName }}</strong>
+                    <span>{{ x.assignedAt | localDate }} → @if (x.returnedAt) { {{ x.returnedAt | localDate }} } @else { <em>present</em> }</span>
+                    @if (x.damageDetails) { <span class="dmg">{{ x.damageDetails }}</span> }
+                  </div>
+                  @if (x.returnedAt) { <app-badge [value]="x.returnCondition" /> } @else { <app-badge value="Active" /> }
+                </div>
+              } @empty {
+                <app-empty-state title="Never assigned" message="Assignments will be listed here, including returned ones." icon="user-check" [compact]="true" />
+              }
+            }
+            @case ('components') {
+              @for (r of d.replacements; track r.id) {
+                <div class="comp-row">
+                  <span class="comp-icon"><app-icon name="cpu" [size]="18" /></span>
+                  <div class="comp-text">
+                    <strong>{{ r.component }}</strong>
+                    <span class="swap"><s>{{ r.oldComponent ?? 'Original part' }}</s> <app-icon name="arrow-right" [size]="13" /> <b>{{ r.newComponent }}</b></span>
+                    <span class="muted small">{{ r.reason }} · {{ r.replacedOn | localDate }} · {{ r.performedBy }}</span>
+                    @if (r.notes) { <span class="small">{{ r.notes }}</span> }
+                  </div>
+                </div>
+              } @empty {
+                <app-empty-state title="No component replacements" message="RAM, battery, storage and other part swaps are recorded here." icon="cpu" [compact]="true">
+                  @if (canReplace()) {
+                    <button type="button" class="btn btn-sm" (click)="run('replace')"><app-icon name="plus" [size]="15" /> Record replacement</button>
+                  }
+                </app-empty-state>
+              }
+            }
+          }
+        </div>
+      </article>
+    </div>
+
+    <app-asset-actions #actions [asset]="a" (done)="load()" />
+    <app-asset-form [open]="editOpen()" [detail]="d" (closed)="editOpen.set(false)" (saved)="onSaved()" />
+  }
+</div>

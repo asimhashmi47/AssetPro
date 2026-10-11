@@ -1,0 +1,165 @@
+<div class="page">
+  <app-page-header title="Inventory" subtitle="Stock levels per item. Every unit is a tracked asset, so counts can never drift or go negative." icon="layers">
+    @if (auth.can('Inventory.StockOut')) {
+      <button type="button" class="btn" (click)="openStockOut()"><app-icon name="package-minus" [size]="16" /> Stock out</button>
+    }
+    @if (auth.can('Inventory.StockIn')) {
+      <button type="button" class="btn btn-primary" (click)="openStockIn()"><app-icon name="package-plus" [size]="16" /> Stock in</button>
+    }
+  </app-page-header>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" [class.active]="tab() === 'items'" (click)="tab.set('items')"><app-icon name="layers" [size]="15" /> Stock levels</button>
+    <button type="button" role="tab" [class.active]="tab() === 'transactions'" (click)="tab.set('transactions')"><app-icon name="history" [size]="15" /> Movements</button>
+  </div>
+
+  @if (tab() === 'items') {
+    <app-data-table #itemsTable [columns]="itemColumns" [fetch]="fetchItems" storageKey="inventory" exportName="inventory" defaultSort="name"
+      searchPlaceholder="Search items, brands, models…" emptyTitle="No inventory yet" emptyMessage="Use Stock in to receive your first batch." emptyIcon="layers">
+      <ng-template appCell="name" let-row>
+        <strong class="item-name">{{ row.name }}</strong>
+        @if (row.model) { <span class="sub">{{ row.model }}</span> }
+      </ng-template>
+      <ng-template appCell="inStock" let-row>
+        <span class="qty" [class.low]="row.isLowStock" [class.zero]="row.inStock === 0">{{ row.inStock }}</span>
+      </ng-template>
+      <ng-template appCell="isLowStock" let-row>
+        @if (row.isLowStock) { <span class="badge warning">Reorder</span> } @else { <span class="badge success">OK</span> }
+      </ng-template>
+      <ng-template appRowActions let-row>
+        @if (auth.can('Inventory.StockOut') && row.inStock > 0) {
+          <button type="button" class="btn btn-sm btn-soft" (click)="openStockOut(row)"><app-icon name="package-minus" [size]="15" /> Issue</button>
+        }
+        @if (auth.can('Assets.View')) {
+          <a class="btn btn-sm btn-ghost btn-icon" routerLink="/assets" title="View units" aria-label="View units"><app-icon name="eye" [size]="16" /></a>
+        }
+        @if (auth.isAdmin()) {
+          <button type="button" class="btn btn-sm btn-ghost btn-icon danger" (click)="removeItem(row)" [disabled]="row.total > 0"
+            [title]="row.total > 0 ? 'Delete its assets first' : 'Delete item'" aria-label="Delete item"><app-icon name="trash" [size]="16" /></button>
+        }
+      </ng-template>
+    </app-data-table>
+  } @else {
+    <app-data-table #txTable [columns]="txColumns" [fetch]="fetchTx" storageKey="inventory-tx" exportName="inventory-movements" defaultSort="occurredAt" defaultDir="desc"
+      searchPlaceholder="Search movements…" emptyTitle="No stock movements yet" emptyIcon="history">
+      <ng-template appCell="quantity" let-row>
+        <span class="num" [class.neg]="row.quantity < 0 || row.type === 'StockOut' || row.type === 'Scrap'">
+          {{ row.type === 'StockOut' || row.type === 'Scrap' ? '−' : (row.quantity > 0 ? '+' : '') }}{{ row.quantity < 0 ? -row.quantity : row.quantity }}
+        </span>
+      </ng-template>
+      <ng-template appCell="assetTag" let-row>
+        @if (row.assetTag) { <a class="tag" [routerLink]="['/assets', row.assetId]">{{ row.assetTag }}</a> } @else { <span class="muted">—</span> }
+      </ng-template>
+    </app-data-table>
+  }
+</div>
+
+<!-- Stock in -->
+<app-modal [open]="stockInOpen()" title="Stock in" subtitle="Receive units into inventory. Each unit gets its own asset tag." icon="package-plus" tone="success"
+  size="lg" [busy]="saving()" (closed)="stockInOpen.set(false)">
+  <form id="stock-in" class="form-grid" [formGroup]="stockInForm" (ngSubmit)="submitStockIn()" novalidate>
+    <div class="field">
+      <label for="si-type">Asset type<span class="req">*</span></label>
+      <app-smart-select inputId="si-type" kind="asset-types" formControlName="assetTypeId" placeholder="Select type" />
+      <app-field-error [control]="stockInForm.controls.assetTypeId" name="Asset type" [server]="errors()['assetTypeId']" />
+    </div>
+    <div class="field">
+      <label for="si-brand">Brand</label>
+      <app-smart-select inputId="si-brand" kind="brands" formControlName="brandId" placeholder="Select brand" />
+    </div>
+    <div class="field">
+      <label for="si-name">Item name<span class="req">*</span></label>
+      <input id="si-name" class="input" formControlName="name" maxlength="150" placeholder="e.g. Logitech M185 Wireless Mouse" />
+      <app-field-error [control]="stockInForm.controls.name" name="Item name" />
+    </div>
+    <div class="field">
+      <label for="si-model">Model</label>
+      <input id="si-model" class="input" formControlName="model" maxlength="100" placeholder="e.g. M185" />
+    </div>
+    <div class="field">
+      <label for="si-qty">Quantity<span class="req">*</span></label>
+      <input id="si-qty" class="input" type="number" min="1" max="500" formControlName="quantity" />
+      <app-field-error [control]="stockInForm.controls.quantity" name="Quantity" [server]="errors()['quantity']" />
+    </div>
+    <div class="field">
+      <label for="si-cost">Unit cost</label>
+      <input id="si-cost" class="input" type="number" min="0" step="0.01" formControlName="unitCost" placeholder="0.00" />
+      <app-field-error [control]="stockInForm.controls.unitCost" name="Unit cost" />
+    </div>
+    <div class="field">
+      <label for="si-pdate">Purchase date</label>
+      <input id="si-pdate" class="input" type="date" formControlName="purchaseDate" [max]="today" />
+      <app-field-error [server]="errors()['purchaseDate']" />
+    </div>
+    <div class="field">
+      <label for="si-warranty">Warranty expiry</label>
+      <input id="si-warranty" class="input" type="date" formControlName="warrantyExpiry" />
+    </div>
+    <div class="field">
+      <label for="si-loc">Location</label>
+      <app-smart-select inputId="si-loc" kind="locations" formControlName="locationId" placeholder="Select location" />
+    </div>
+    <div class="field">
+      <label for="si-cond">Condition</label>
+      <select id="si-cond" class="select" formControlName="condition">
+        @for (c of conditions; track c.value) { <option [value]="c.value">{{ c.label }}</option> }
+      </select>
+    </div>
+    <div class="field">
+      <label for="si-reorder">Reorder level</label>
+      <input id="si-reorder" class="input" type="number" min="0" formControlName="reorderLevel" placeholder="Keep current" />
+      <span class="hint">Flag as low stock at or below this many available units.</span>
+    </div>
+    <div class="field full">
+      <label for="si-serials">Serial numbers <span class="muted">(optional, one per line — {{ serialCount() }} entered)</span></label>
+      <textarea id="si-serials" class="textarea mono-text" formControlName="serials" rows="3" placeholder="SN-0001&#10;SN-0002"></textarea>
+      <app-field-error [server]="errors()['serialNumbers']" />
+    </div>
+    <div class="field full">
+      <label for="si-notes">Notes</label>
+      <input id="si-notes" class="input" formControlName="notes" maxlength="2000" placeholder="e.g. PO-2026-118 from Acme Supplies" />
+    </div>
+  </form>
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="stockInOpen.set(false)" [disabled]="saving()">Cancel</button>
+    <button type="submit" form="stock-in" class="btn btn-success" [disabled]="saving()">
+      @if (saving()) { <span class="spinner"></span> } Add to inventory
+    </button>
+  </ng-container>
+</app-modal>
+
+<!-- Stock out -->
+<app-modal [open]="stockOutOpen()" title="Stock out" subtitle="Issue available units to an employee." icon="package-minus" tone="info"
+  [busy]="saving()" (closed)="stockOutOpen.set(false)">
+  <form id="stock-out" class="stack" [formGroup]="stockOutForm" (ngSubmit)="submitStockOut()" novalidate>
+    <div class="field">
+      <label for="so-item">Item<span class="req">*</span></label>
+      <select id="so-item" class="select" formControlName="inventoryItemId">
+        <option [ngValue]="null">Select an item with stock…</option>
+        @for (i of stockItems(); track i.id) { <option [ngValue]="i.id">{{ i.name }} — {{ i.inStock }} available</option> }
+      </select>
+      <app-field-error [control]="stockOutForm.controls.inventoryItemId" name="Item" [server]="errors()['inventoryItemId']" />
+    </div>
+    <div class="field">
+      <label for="so-emp">Employee<span class="req">*</span></label>
+      <app-employee-picker inputId="so-emp" formControlName="employeeId" />
+      <app-field-error [control]="stockOutForm.controls.employeeId" name="Employee" [server]="errors()['employeeId']" />
+    </div>
+    <div class="field">
+      <label for="so-qty">Quantity<span class="req">*</span></label>
+      <input id="so-qty" class="input" type="number" min="1" [max]="maxOut() || 1" formControlName="quantity" />
+      @if (selectedStockItem()) { <span class="hint">{{ maxOut() }} unit(s) available.</span> }
+      <app-field-error [control]="stockOutForm.controls.quantity" name="Quantity" [server]="errors()['quantity']" />
+    </div>
+    <div class="field">
+      <label for="so-notes">Notes</label>
+      <input id="so-notes" class="input" formControlName="notes" maxlength="2000" />
+    </div>
+  </form>
+  <ng-container modal-footer>
+    <button type="button" class="btn" (click)="stockOutOpen.set(false)" [disabled]="saving()">Cancel</button>
+    <button type="submit" form="stock-out" class="btn btn-primary" [disabled]="saving()">
+      @if (saving()) { <span class="spinner"></span> } Issue units
+    </button>
+  </ng-container>
+</app-modal>

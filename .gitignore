@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# SQLite databases (created at startup)
+*.db
+*.db-shm
+*.db-wal
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets
+appsettings.*.local.json
+.env
+
+# Local tooling
+.claude/
+frontend/frontend/

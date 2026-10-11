@@ -1,0 +1,99 @@
+<div class="auth">
+  <section class="hero" aria-hidden="true">
+    <div class="orb o1"></div>
+    <div class="orb o2"></div>
+    <div class="hero-inner">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="9" fill="rgba(255,255,255,.16)"/><path d="M9 21.5 15.2 9h1.6L23 21.5h-3l-1.2-2.6h-5.6L12 21.5H9Zm5.2-5h3.6L16 12.6l-1.8 3.9Z" fill="#fff"/></svg>
+        <span>AssetPro</span>
+      </div>
+      <div class="pitch">
+        <h1>Track every asset.<br />Simplify every handover.</h1>
+        <p>The lightweight asset and resource tracker for modern offices.</p>
+      </div>
+
+      <!-- A small "product glimpse" card -->
+      <div class="glimpse">
+        <div class="g-row">
+          <span class="g-tag">LAP-00045</span>
+          <span class="g-pill">Assigned</span>
+        </div>
+        <div class="g-line"><span class="g-dot d1"></span> Laptop assigned to Muhammad <em>Oct 04</em></div>
+        <div class="g-line"><span class="g-dot d2"></span> RAM replaced 8GB → 16GB <em>Jan 04</em></div>
+        <div class="g-line"><span class="g-dot d3"></span> Repair completed <em>Feb 11</em></div>
+      </div>
+
+      <ul class="features">
+        @for (f of features; track f.title) {
+          <li>
+            <span class="f-icon"><app-icon [name]="f.icon" [size]="18" /></span>
+            <span><strong>{{ f.title }}</strong>{{ f.text }}</span>
+          </li>
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="mobile-brand">
+        <svg viewBox="0 0 32 32" width="36" height="36"><defs><linearGradient id="lgm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lgm)"/><path d="M9 21.5 15.2 9h1.6L23 21.5h-3l-1.2-2.6h-5.6L12 21.5H9Zm5.2-5h3.6L16 12.6l-1.8 3.9Z" fill="#fff"/></svg>
+        <strong>AssetPro</strong>
+      </div>
+      <h2>Sign in</h2>
+      <p class="muted">Use your work email to access AssetPro.</p>
+
+      @if (expired()) {
+        <div class="notice info" role="status"><app-icon name="clock" [size]="16" /> Your session expired. Please sign in again.</div>
+      }
+      @if (error()) {
+        <div class="notice danger" role="alert"><app-icon name="alert" [size]="16" /> {{ error() }}</div>
+      }
+
+      <div class="field">
+        <label for="email">Email</label>
+        <div class="input-icon">
+          <app-icon name="mail" />
+          <input id="email" class="input" type="email" formControlName="email" autocomplete="username" placeholder="you@company.com" />
+        </div>
+        <app-field-error [control]="form.controls.email" name="Email" />
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="input-icon pw">
+          <app-icon name="lock" />
+          <input id="password" class="input" [type]="showPassword() ? 'text' : 'password'" formControlName="password" autocomplete="current-password" placeholder="••••••••" />
+          <button type="button" class="eye" (click)="showPassword.set(!showPassword())" [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'" [attr.aria-pressed]="showPassword()">
+            <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" [size]="17" />
+          </button>
+        </div>
+        <app-field-error [control]="form.controls.password" name="Password" />
+      </div>
+
+      <div class="row between">
+        <label class="check"><input type="checkbox" formControlName="rememberMe" /> Remember me for 7 days</label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block submit" [disabled]="submitting()">
+        @if (submitting()) { <span class="spinner"></span> Signing in… } @else { Sign in <app-icon name="arrow-right" [size]="16" /> }
+      </button>
+
+      <div class="demo">
+        <div class="demo-head"><app-icon name="info" [size]="15" /> Demo accounts <span class="badge warning plain">Change before production</span></div>
+        <div class="demo-grid">
+          <button type="button" (click)="fillDemo('admin@assetpro.local', 'Admin@123')">
+            <strong>Administrator</strong><span>admin&#64;assetpro.local · Admin&#64;123</span>
+          </button>
+          <button type="button" (click)="fillDemo('muhammad.ali@assetpro.local', 'User@1234')">
+            <strong>Standard user</strong><span>muhammad.ali&#64;assetpro.local · User&#64;1234</span>
+          </button>
+        </div>
+      </div>
+
+      <footer class="auth-footer">
+        <app-credit />
+      </footer>
+    </form>
+  </section>
+</div>
